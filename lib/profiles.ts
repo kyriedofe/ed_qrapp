@@ -1,0 +1,40 @@
+import { supabase } from './supabase';
+
+export type Role = 'student' | 'teacher' | 'admin';
+
+export type Profile = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: Role;
+};
+
+export async function getProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data as Profile;
+}
+
+// Profile edits from the Profile screen only touch full_name.
+// Roles are changed exclusively by administrators (lib/admin.ts)
+// and are additionally protected by the protect_profile_role()
+// database trigger, so nobody can promote themselves.
+export async function updateProfile(
+  userId: string,
+  updates: { full_name?: string }
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', userId);
+
+  return { error: error?.message ?? null };
+}
