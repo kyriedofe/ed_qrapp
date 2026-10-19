@@ -7,6 +7,7 @@ export type EventPhase = 'upcoming' | 'ongoing' | 'closed';
 
 export type ManagerStats = {
   students: number;
+  notCheckedIn: number;
   events: number;
   active: number;
   closed: number;
@@ -256,8 +257,26 @@ export async function getManagerStats(
     students = Number(studentCount);
   }
 
+  // How many students have NOT checked in to anything yet. We read
+  // the distinct checked-in student ids (own events for teachers,
+  // all events for admins) which RLS already scopes correctly, then
+  // subtract them from the total student count.
+  const checkedInIds = new Set<string>();
+  if (eventIds.length > 0) {
+    const { data: checkInRows } = await supabase
+      .from('attendance')
+      .select('student_id')
+      .in('event_id', eventIds);
+    (checkInRows as { student_id: string }[] | null)?.forEach((row) => {
+      checkedInIds.add(row.student_id);
+    });
+  }
+
+  const notCheckedIn = Math.max(students - checkedInIds.size, 0);
+
   return {
     students,
+    notCheckedIn,
     events: events.length,
     active,
     closed,

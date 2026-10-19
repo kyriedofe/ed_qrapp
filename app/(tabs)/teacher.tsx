@@ -39,6 +39,7 @@ import { buildQRPayload } from '@/lib/qr';
 
 const EMPTY_STATS: ManagerStats = {
   students: 0,
+  notCheckedIn: 0,
   events: 0,
   active: 0,
   closed: 0,
@@ -357,6 +358,12 @@ export default function TeacherScreen() {
 
       <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.statsGrid}>
         <StatCard icon="people-outline" label="Students" value={stats.students} />
+        <StatCard
+          icon="close-circle-outline"
+          label="Not Checked In"
+          value={stats.notCheckedIn}
+          tone={COLORS.danger}
+        />
         <StatCard icon="calendar-outline" label="Events" value={stats.events} />
         <StatCard icon="radio-outline" label="Active" value={stats.active} />
         <StatCard icon="lock-closed-outline" label="Closed" value={stats.closed} />
@@ -660,14 +667,16 @@ function StatCard({
   icon,
   label,
   value,
+  tone,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: number;
+  tone?: string;
 }) {
   return (
     <View style={styles.statCard}>
-      <Ionicons name={icon} size={20} color={COLORS.primary} />
+      <Ionicons name={icon} size={20} color={tone ?? COLORS.primary} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>

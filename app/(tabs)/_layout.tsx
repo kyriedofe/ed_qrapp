@@ -90,7 +90,7 @@ export default function TabLayout() {
         name="notifications"
         options={{
           title: 'Notifications',
-          href: isStudent ? undefined : null,
+          href: null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="notifications" size={size} color={color} />
           ),
