@@ -302,3 +302,170 @@ create policy "Teachers can view profiles of their attendees"
 ------------------------------------------------------------
 -- END OF SCHEMA
 ------------------------------------------------------------
+
+-- ============================================================
+-- PART II — Event management, notifications, attendance tools
+-- (same SQL as part2-migration.sql; idempotent)
+-- ============================================================
+
+-- Allow the creator and admins to delete an event.
+-- Attendance rows are removed automatically (ON DELETE CASCADE).
+drop policy if exists "Creators and administrators can delete events" on public.events;
+create policy "Creators and administrators can delete events"
+  on public.events for delete
+  using (auth.uid() = created_by or public.is_admin());
+
+-- Teachers may correct/remove attendance for their own events.
+drop policy if exists "Teachers can update attendance for their events" on public.attendance;
+create policy "Teachers can update attendance for their events"
+  on public.attendance for update
+  using (
+    exists (
+      select 1 from public.events e
+      where e.id = attendance.event_id
+        and e.created_by = auth.uid()
+    )
+  );
+
+drop policy if exists "Teachers can delete attendance for their events" on public.attendance;
+create policy "Teachers can delete attendance for their events"
+  on public.attendance for delete
+  using (
+    exists (
+      select 1 from public.events e
+      where e.id = attendance.event_id
+        and e.created_by = auth.uid()
+    )
+  );
+
+-- Notifications: one row per student per event per kind.
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  event_id uuid references public.events (id) on delete cascade,
+  kind text not null default 'new' check (kind in ('new', 'closed')),
+  title text not null,
+  body text,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (user_id, event_id, kind)
+);
+
+create index if not exists notifications_user_unread_idx
+  on public.notifications (user_id, is_read, created_at desc);
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "Users can view their own notifications" on public.notifications;
+create policy "Users can view their own notifications"
+  on public.notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can update their own notifications" on public.notifications;
+create policy "Users can update their own notifications"
+  on public.notifications for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their own notifications" on public.notifications;
+create policy "Users can delete their own notifications"
+  on public.notifications for delete
+  using (auth.uid() = user_id);
+
+-- Trigger: notify every student when a new event is created.
+create or replace function public.notify_students_new_event()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.notifications (user_id, event_id, kind, title, body)
+  select
+    p.id,
+    new.id,
+    'new',
+    'New attendance event: ' || new.title,
+    coalesce(
+      to_char(new.start_time, 'Mon DD, YYYY at HH12:MI AM'),
+      'Schedule to be announced'
+    )
+  from public.profiles p
+  where p.role = 'student'
+  on conflict (user_id, event_id, kind) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_event_created_notify on public.events;
+create trigger on_event_created_notify
+  after insert on public.events
+  for each row execute procedure public.notify_students_new_event();
+
+-- Trigger: notify every student when an event is closed.
+create or replace function public.notify_students_event_closed()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new.status = 'closed' and old.status is distinct from 'closed' then
+    insert into public.notifications (user_id, event_id, kind, title, body)
+    select
+      p.id,
+      new.id,
+      'closed',
+      'Event closed: ' || new.title,
+      'Attendance is no longer accepted for this event.'
+    from public.profiles p
+    where p.role = 'student'
+    on conflict (user_id, event_id, kind) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_event_closed_notify on public.events;
+create trigger on_event_closed_notify
+  after update of status on public.events
+  for each row execute procedure public.notify_students_event_closed();
+
+-- RPC: total number of student accounts (dashboard stats).
+create or replace function public.student_count()
+returns bigint
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*) from public.profiles where role = 'student';
+$$;
+
+grant execute on function public.student_count() to authenticated;
+
+-- RPC: students who have not checked in to an event.
+-- Callable only by the event creator or an administrator.
+create or replace function public.event_non_attendees(p_event_id uuid)
+returns table (student_id uuid, full_name text, email text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id, p.full_name, p.email
+  from public.profiles p
+  where p.role = 'student'
+    and exists (
+      select 1 from public.events e
+      where e.id = p_event_id
+        and (e.created_by = auth.uid() or public.is_admin())
+    )
+    and not exists (
+      select 1 from public.attendance a
+      where a.event_id = p_event_id
+        and a.student_id = p.id
+    )
+  order by p.full_name nulls last, p.email;
+$$;
+
+grant execute on function public.event_non_attendees(uuid) to authenticated;

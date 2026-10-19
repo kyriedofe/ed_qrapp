@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import AppButton from '@/components/AppButton';
 import Header from '@/components/Header';
@@ -63,10 +64,14 @@ export default function LoginScreen() {
               <Header title="QR Attendance" />
             </View>
 
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to record your attendance</Text>
+            <Animated.Text entering={FadeInDown.delay(80).duration(400)} style={styles.title}>
+              Welcome Back
+            </Animated.Text>
+            <Animated.Text entering={FadeInDown.delay(140).duration(400)} style={styles.subtitle}>
+              Sign in to record your attendance
+            </Animated.Text>
 
-            <View style={styles.form}>
+            <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.form}>
               <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
@@ -106,11 +111,13 @@ export default function LoginScreen() {
                   onPress={handleLogin}
                 />
               )}
-            </View>
+            </Animated.View>
 
-            <Link href="/register" style={styles.link}>
-              Don&apos;t have an account? Sign Up
-            </Link>
+            <Animated.View entering={FadeInDown.delay(260).duration(400)}>
+              <Link href="/register" style={styles.link}>
+                Don&apos;t have an account? Sign Up
+              </Link>
+            </Animated.View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

@@ -313,3 +313,33 @@
 - **Testing performed:** `npx tsc --noEmit` — passed with no errors. (Lint is not configured in this repo; `npm run lint` has no ESLint config.) Verified RLS policy flow: is_admin()/is_event_manager() are `security definer` so they bypass RLS safely; the admin policies mirror the existing teacher `exists(... created_by = auth.uid())` pattern.
 - **Result:** Pass — the app now satisfies the Part I feature checklist. NOTE: `schema.sql` must be re-run in the Supabase SQL Editor (idempotent), then bootstrap the first admin with `update public.profiles set role = 'admin' where email = '...';`
 - **Next step:** Part II — Hackathon: dynamic/rotating QR, late-detection analytics, real-time monitoring, notifications (team phase).
+
+---
+
+### Phase 12 — Part II: Event Management Dashboard & In-App Notifications
+
+- **Date:** 2026-10-19
+- **Phase:** 12
+- **Module:** Teacher/Admin event management, per-event attendance tools, student notifications
+- **Files changed:**
+  - `schema.sql` (appended Part II: notifications table + RLS, notify triggers, event delete policy, teacher attendance update/delete policies, `student_count()` / `event_non_attendees()` RPCs)
+  - `lib/events.ts` (`getEventById`, `deleteEvent`, `getEventsForManager`, `getManagerStats`, `getEventPhase`/`getEventPhaseLabel`, `ManagerStats`/`EventPhase` types)
+  - `lib/attendance.ts` (`getStudentAttendedEventIds`, `getStudentAttendanceForEvent`, `getAttendanceCounts`, `getEventAttendanceDetail`, `updateAttendanceStatus`, `deleteAttendanceRecord`)
+  - `app/(tabs)/_layout.tsx` (student-only Notifications tab; Teacher tab renamed Dashboard; History title role-aware)
+  - `app/(tabs)/teacher.tsx` (rewritten as staff Dashboard: 5 stat cards, collapsible create/edit form, QR card, event list with Attendance / QR / Edit / Close-Reopen / Delete)
+  - `app/(tabs)/index.tsx` (student Notifications preview + Events & Attendance section with `EventCard`s; staff quick links)
+  - `app/(tabs)/events.tsx` (uses `EventCard`; All / Ongoing / Upcoming / Closed filters)
+  - `app/(tabs)/history.tsx` (staff list is now tappable event cards that open the event detail; student history unchanged)
+  - `app/(tabs)/admin.tsx` (added "Manage Attendance" link per event → event detail)
+- **Files created:**
+  - `part2-migration.sql` (standalone, idempotent Part II migration for existing databases)
+  - `lib/notifications.ts` (`getNotifications`, `getUnreadNotificationCount`, `markNotificationRead`, `markAllNotificationsRead`)
+  - `components/EventCard.tsx` (student event card with Upcoming/Ongoing/Closed + attendance-recorded badge)
+  - `app/(tabs)/notifications.tsx` (student notifications list: unread styling, tap to open, mark-all-read)
+  - `app/event/[id].tsx` (event detail + staff attendance management: stats, search, Present/Late/Not-checked-in filters, mark/remove, close/reopen, delete, edit)
+- **Files removed:** None
+- **What changed:** Completed the Part II event-management feature set. (1) **Database:** new `notifications` table with own-row RLS and a unique `(user_id, event_id, kind)` guard; security-definer triggers notify every student when an event is created or closed (`on conflict do nothing` prevents repeats); students get an in-app notification list. Added an event DELETE policy (creator or admin; attendance removed by cascade), teacher attendance UPDATE/DELETE policies for their own events, and two RPCs (`student_count`, `event_non_attendees`) so dashboards show real totals and teachers can list non-attendees without reading private profiles. (2) **Services:** event lookups/delete, derived phase (`upcoming`/`ongoing`/`closed`), manager statistics, attendance detail (attendees + non-attendees + counts), and notification reads/updates. (3) **UI:** staff Dashboard with real stats and full event lifecycle; a dedicated event detail screen for attendance management; student cards + filters + notifications; role-aware tabs. Event status stays `open`/`closed` in the database — Upcoming/Ongoing is derived from the scheduled times so no constraint change was needed.
+- **Why it changed:** Delivers the Part II management and notification experience while respecting the existing security model (teachers only manage their own events; admins manage all; students never read others' data). Reusing derived phases avoids a risky schema/status migration.
+- **Testing performed:** `npx tsc --noEmit` — passed with no errors. `npx expo lint` — passed (exit 0). Route types regenerated (`npx expo start` initializes `.expo/types/router.d.ts`) so typed routes for `/event/[id]` and `/notifications` resolve. NOT run against a live Supabase project in this environment — the SQL must be executed in the dashboard.
+- **Result:** Pass — code type-checks and lints clean. NOTE: run the Part II SQL before testing features. Either re-run the full `schema.sql` (idempotent) in the Supabase SQL Editor, or paste `part2-migration.sql`. Notifications are **in-app only** — push notifications are NOT implemented.
+- **Next step:** Optional — dynamic/rotating QR codes, analytics dashboards, and real-time attendance monitoring.

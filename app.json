@@ -5,13 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "qrattendanceapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "icon": "./assets/images/icon.png",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FCE7F3"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true
@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#EC4899"
+        "backgroundColor": "#FF3030"
       },
       "package": "com.school.qrattendance",
       "permissions": [
@@ -46,7 +46,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d21624aa-a0eb-4a2b-a802-ac5d89789a7d"
+        "projectId": "cd6f9cc6-a29c-4fe0-916d-ac2b79ae5725"
       }
     }
   }

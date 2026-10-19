@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 
@@ -8,7 +9,7 @@ type Props = {
 
 export default function Header({ title }: Props) {
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeInDown.duration(400)} style={styles.container}>
       <View style={styles.logoCircle}>
         <MaterialIcons
           name="qr-code-scanner"
@@ -17,7 +18,7 @@ export default function Header({ title }: Props) {
         />
       </View>
       <Text style={styles.title}>{title}</Text>
-    </View>
+    </Animated.View>
   );
 }
 

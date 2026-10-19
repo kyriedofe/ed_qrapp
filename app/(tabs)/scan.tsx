@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import AppButton from '@/components/AppButton';
 import { COLORS } from '@/constants/colors';
@@ -98,7 +99,7 @@ export default function ScanScreen() {
       )}
       <View style={styles.overlay}>
         {message ? (
-          <View style={styles.card}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.card}>
             <Text
               style={[styles.message, success ? styles.ok : styles.err]}
             >
@@ -115,11 +116,11 @@ export default function ScanScreen() {
               icon="scan-outline"
               onPress={resetScanner}
             />
-          </View>
+          </Animated.View>
         ) : (
-          <View style={styles.card}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.card}>
             <Text style={styles.hint}>Point the camera at an event QR code</Text>
-            <Text style={styles.or}>— or if it can't be scanned —</Text>
+            <Text style={styles.or}>— or if it can&apos;t be scanned —</Text>
             <TextInput
               style={styles.input}
               value={manualCode}
@@ -134,7 +135,7 @@ export default function ScanScreen() {
               icon="checkmark-outline"
               onPress={handleManualSubmit}
             />
-          </View>
+          </Animated.View>
         )}
       </View>
     </View>

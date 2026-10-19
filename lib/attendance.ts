@@ -42,6 +42,42 @@ export type TeacherEventSummary = {
   attendeeCount: number;
 };
 
+export type EventAttendee = {
+  attendanceId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string | null;
+  scannedAt: string;
+  status: AttendanceStatus;
+};
+
+export type EventNonAttendee = {
+  studentId: string;
+  studentName: string;
+  studentEmail: string | null;
+};
+
+export type EventAttendanceDetail = {
+  attendees: EventAttendee[];
+  nonAttendees: EventNonAttendee[];
+};
+
+export type MyAttendanceRecord = {
+  id: string;
+  status: AttendanceStatus;
+  scannedAt: string;
+} | null;
+
+function displayName(
+  fullName: string | null | undefined,
+  email: string | null | undefined,
+  fallbackId: string
+): string {
+  if (fullName && fullName.trim()) return fullName;
+  if (email) return email.split('@')[0];
+  return `…${fallbackId.slice(-8)}`;
+}
+
 // Grace period: a scan within 15 minutes of the event start is
 // "present"; after that it is recorded as "late".
 const LATE_GRACE_MS = 15 * 60 * 1000;
@@ -271,4 +307,148 @@ export async function getTeacherEventSummary(
     title: e.title,
     attendeeCount: counts[e.id] ?? 0,
   }));
+}
+
+// ------------------------------------------------------------
+// Student helpers
+// ------------------------------------------------------------
+
+// Event UUIDs the student has already checked in to.
+export async function getStudentAttendedEventIds(
+  studentId: string
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('event_id')
+    .eq('student_id', studentId);
+
+  if (error || !data) return new Set();
+  return new Set((data as { event_id: string }[]).map((row) => row.event_id));
+}
+
+export async function getStudentAttendanceForEvent(
+  studentId: string,
+  eventId: string
+): Promise<MyAttendanceRecord> {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('id, status, scanned_at')
+    .eq('student_id', studentId)
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const row = data as { id: string; status: string; scanned_at: string };
+  return {
+    id: row.id,
+    status: row.status === 'late' ? 'late' : 'present',
+    scannedAt: row.scanned_at,
+  };
+}
+
+// ------------------------------------------------------------
+// Manager helpers (teacher: own events / admin: all events)
+// ------------------------------------------------------------
+
+// Number of attendees per event, keyed by event id.
+export async function getAttendanceCounts(
+  eventIds: string[]
+): Promise<Record<string, number>> {
+  if (eventIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('event_id')
+    .in('event_id', eventIds);
+
+  if (error || !data) return {};
+
+  const counts: Record<string, number> = {};
+  (data as { event_id: string }[]).forEach((row) => {
+    counts[row.event_id] = (counts[row.event_id] ?? 0) + 1;
+  });
+  return counts;
+}
+
+// Full attendance picture for one event: who checked in and who
+// did not. Non-attendees come from a security-definer RPC so the
+// teacher sees the list without reading private profiles directly.
+export async function getEventAttendanceDetail(
+  eventId: string
+): Promise<EventAttendanceDetail> {
+  const { data: rows, error } = await supabase
+    .from('attendance')
+    .select('id, student_id, scanned_at, status')
+    .eq('event_id', eventId)
+    .order('scanned_at', { ascending: true });
+
+  const attendanceRows = error ? [] : ((rows ?? []) as any[]);
+  const studentIds = [...new Set(attendanceRows.map((r) => r.student_id))];
+
+  let profileMap: Record<string, { full_name: string | null; email: string | null }> = {};
+  if (studentIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', studentIds);
+    (profiles as any[] | null)?.forEach((p: any) => {
+      profileMap[p.id] = { full_name: p.full_name ?? null, email: p.email ?? null };
+    });
+  }
+
+  const attendees: EventAttendee[] = attendanceRows.map((row) => {
+    const profile = profileMap[row.student_id];
+    return {
+      attendanceId: row.id,
+      studentId: row.student_id,
+      studentName: displayName(
+        profile?.full_name,
+        profile?.email,
+        row.student_id
+      ),
+      studentEmail: profile?.email ?? null,
+      scannedAt: row.scanned_at,
+      status: (row.status === 'late' ? 'late' : 'present') as AttendanceStatus,
+    };
+  });
+
+  const { data: missing, error: missingError } = await supabase.rpc(
+    'event_non_attendees',
+    { p_event_id: eventId }
+  );
+
+  const nonAttendees: EventNonAttendee[] =
+    missingError || !missing
+      ? []
+      : (missing as any[]).map((p) => ({
+          studentId: p.student_id,
+          studentName: displayName(p.full_name, p.email, p.student_id),
+          studentEmail: p.email ?? null,
+        }));
+
+  return { attendees, nonAttendees };
+}
+
+export async function updateAttendanceStatus(
+  attendanceId: string,
+  status: AttendanceStatus
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('attendance')
+    .update({ status })
+    .eq('id', attendanceId);
+
+  return { error: error?.message ?? null };
+}
+
+export async function deleteAttendanceRecord(
+  attendanceId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('attendance')
+    .delete()
+    .eq('id', attendanceId);
+
+  return { error: error?.message ?? null };
 }

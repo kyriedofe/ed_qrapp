@@ -2,26 +2,38 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { getProfile, type Role } from '@/lib/profiles';
 import {
   getAttendanceHistory,
-  getTeacherEventAttendance,
+  getAttendanceCounts,
   type AttendanceRecord,
   type AttendanceStatus,
-  type TeacherEventAttendance,
 } from '@/lib/attendance';
+import {
+  getEventPhase,
+  getEventPhaseLabel,
+  getEventsForManager,
+  type CloudEvent,
+  type EventPhase,
+} from '@/lib/events';
 
-function shortId(id: string) {
-  return id ? `…${id.slice(-8)}` : 'unknown';
-}
+const PHASE_STYLES: Record<EventPhase, { backgroundColor: string; color: string }> = {
+  upcoming: { backgroundColor: COLORS.warning, color: COLORS.background },
+  ongoing: { backgroundColor: COLORS.primary, color: COLORS.textOnPrimary },
+  closed: { backgroundColor: COLORS.surface, color: COLORS.textSecondary },
+};
 
 function StatusBadge({ status }: { status: AttendanceStatus }) {
   const late = status === 'late';
@@ -33,12 +45,12 @@ function StatusBadge({ status }: { status: AttendanceStatus }) {
 }
 
 export default function HistoryScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [role, setRole] = useState<Role | null>(null);
   const [studentRecords, setStudentRecords] = useState<AttendanceRecord[]>([]);
-  const [teacherEvents, setTeacherEvents] = useState<TeacherEventAttendance[]>(
-    []
-  );
+  const [staffEvents, setStaffEvents] = useState<CloudEvent[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -48,17 +60,20 @@ export default function HistoryScreen() {
     }
     setLoading(true);
     const profile = await getProfile(user.id);
-    const currentRole = profile?.role ?? 'student';
+    const currentRole: Role = profile?.role ?? 'student';
     setRole(currentRole);
 
     if (currentRole === 'student') {
-      const records = await getAttendanceHistory(user.id);
-      setStudentRecords(records);
-      setTeacherEvents([]);
+      setStudentRecords(await getAttendanceHistory(user.id));
+      setStaffEvents([]);
+      setCounts({});
     } else {
-      // Teachers AND admins see the events they manage
-      const events = await getTeacherEventAttendance(user.id);
-      setTeacherEvents(events);
+      const managerEvents = await getEventsForManager(currentRole, user.id);
+      const nextCounts = await getAttendanceCounts(
+        managerEvents.map((event) => event.id)
+      );
+      setStaffEvents(managerEvents);
+      setCounts(nextCounts);
       setStudentRecords([]);
     }
     setLoading(false);
@@ -72,81 +87,77 @@ export default function HistoryScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <Animated.View entering={FadeIn.duration(300)} style={styles.centered}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.muted}>Loading records...</Text>
-      </View>
+      </Animated.View>
     );
   }
 
   if (role !== 'student') {
-    if (teacherEvents.length === 0) {
+    if (staffEvents.length === 0) {
       return (
-        <View style={styles.centered}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.centered}>
+          <Ionicons name="calendar-outline" size={48} color={COLORS.textSecondary} />
           <Text style={styles.title}>No events yet</Text>
           <Text style={styles.muted}>
-            Create an event in the Teacher tab to see attendance here.
+            Create an event in the Dashboard tab to see attendance here.
           </Text>
-        </View>
+        </Animated.View>
       );
     }
     return (
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        data={teacherEvents}
-        keyExtractor={(item) => item.eventId}
-        ListHeaderComponent={<Text style={styles.screenTitle}>History</Text>}
-        renderItem={({ item }) => {
-          // Event date: created_at, falling back to startTime
-          const eventDate = item.createdAt ?? item.startTime;
-          const closed = item.eventStatus === 'closed';
+        data={staffEvents}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <Animated.Text entering={FadeInDown.duration(400)} style={styles.screenTitle}>
+            Attendance
+          </Animated.Text>
+        }
+        renderItem={({ item, index }) => {
+          const phase = getEventPhase(item);
+          const phaseStyle = PHASE_STYLES[phase];
           return (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{item.attendeeCount}</Text>
-                </View>
-              </View>
-              <View style={styles.metaRow}>
-                <Text style={styles.code}>{item.eventCode}</Text>
-                <View
-                  style={[
-                    styles.eventBadge,
-                    closed ? styles.eventClosed : styles.eventOpen,
-                  ]}
-                >
-                  <Text style={styles.eventBadgeText}>
-                    {closed ? 'Closed' : 'Open'}
-                  </Text>
-                </View>
-              </View>
-              {eventDate ? (
-                <Text style={styles.code}>
-                  {new Date(eventDate).toLocaleString()}
-                </Text>
-              ) : null}
-              <View style={styles.divider} />
-              {/* Attendees are listed below once they have scanned */}
-              {item.attendees.length === 0 ? (
-                <Text style={styles.emptyScans}>No scans yet</Text>
-              ) : (
-                item.attendees.map((a) => (
-                  <View key={`${item.eventId}-${a.studentId}`} style={styles.attRow}>
-                    <View style={styles.attInfo}>
-                      <Text style={styles.attName}>
-                        {a.studentName ?? shortId(a.studentId)}
-                      </Text>
-                      <Text style={styles.attTime}>
-                        {new Date(a.scannedAt).toLocaleString()}
-                      </Text>
-                    </View>
-                    <StatusBadge status={a.status} />
+            <Animated.View
+              entering={FadeInDown.delay(Math.min(index, 8) * 60).duration(350)}
+            >
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/event/[id]',
+                    params: { id: item.id },
+                  })
+                }
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{counts[item.id] ?? 0}</Text>
                   </View>
-                ))
-              )}
-            </View>
+                </View>
+                <View style={styles.metaRow}>
+                  <Text style={styles.code}>{item.event_code}</Text>
+                  <View style={[styles.eventBadge, { backgroundColor: phaseStyle.backgroundColor }]}>
+                    <Text style={[styles.eventBadgeText, { color: phaseStyle.color }]}>
+                      {getEventPhaseLabel(phase)}
+                    </Text>
+                  </View>
+                </View>
+                {item.start_time ? (
+                  <Text style={styles.code}>
+                    {new Date(item.start_time).toLocaleString()}
+                  </Text>
+                ) : null}
+                <View style={styles.openRow}>
+                  <Text style={styles.openText}>Tap to manage attendance</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                </View>
+              </Pressable>
+            </Animated.View>
           );
         }}
       />
@@ -155,12 +166,13 @@ export default function HistoryScreen() {
 
   if (studentRecords.length === 0) {
     return (
-      <View style={styles.centered}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.centered}>
+        <Ionicons name="time-outline" size={48} color={COLORS.textSecondary} />
         <Text style={styles.title}>No records yet</Text>
         <Text style={styles.muted}>
           Scan an event QR code to record your attendance.
         </Text>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -169,10 +181,17 @@ export default function HistoryScreen() {
       style={styles.list}
       contentContainerStyle={styles.listContent}
       data={studentRecords}
-      ListHeaderComponent={<Text style={styles.screenTitle}>History</Text>}
+      ListHeaderComponent={
+        <Animated.Text entering={FadeInDown.duration(400)} style={styles.screenTitle}>
+          My Attendance
+        </Animated.Text>
+      }
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
+      renderItem={({ item, index }) => (
+        <Animated.View
+          entering={FadeInDown.delay(Math.min(index, 8) * 60).duration(350)}
+          style={styles.card}
+        >
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>{item.eventTitle}</Text>
             <StatusBadge status={item.status} />
@@ -181,7 +200,7 @@ export default function HistoryScreen() {
           <Text style={styles.attTime}>
             {new Date(item.scannedAt).toLocaleString()}
           </Text>
-        </View>
+        </Animated.View>
       )}
     />
   );
@@ -194,20 +213,15 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingTop: 48,
+    paddingTop: 24,
+    paddingBottom: 40,
     gap: 12,
   },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  emptyScans: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 4,
+    marginBottom: 4,
   },
   centered: {
     flex: 1,
@@ -231,33 +245,39 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     gap: 4,
+  },
+  cardPressed: {
+    borderColor: COLORS.primary,
+    opacity: 0.85,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   cardTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    flex: 1,
   },
   countBadge: {
     backgroundColor: COLORS.success,
-    borderRadius: 24,
-    width: 48,
-    height: 48,
+    borderRadius: 20,
+    minWidth: 40,
+    height: 40,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   countText: {
     color: COLORS.textOnPrimary,
-    fontWeight: '700',
-    fontSize: 18,
+    fontWeight: '800',
+    fontSize: 16,
   },
   metaRow: {
     flexDirection: 'row',
@@ -273,16 +293,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  eventOpen: {
-    backgroundColor: COLORS.success,
-  },
-  eventClosed: {
-    backgroundColor: COLORS.danger,
-  },
   eventBadgeText: {
-    color: COLORS.textOnPrimary,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   statusBadge: {
     borderRadius: 8,
@@ -301,27 +314,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 10,
-  },
-  attRow: {
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  attInfo: {
-    flex: 1,
-  },
-  attName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
   attTime: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  openRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: 8,
+    paddingTop: 10,
+  },
+  openText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });

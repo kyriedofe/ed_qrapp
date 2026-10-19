@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import AppButton from '@/components/AppButton';
 import Header from '@/components/Header';
@@ -65,7 +66,7 @@ export default function RegisterScreen() {
       } else {
         setSuccess(true);
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -89,13 +90,18 @@ export default function RegisterScreen() {
               <Header title="QR Attendance" />
             </View>
 
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>
+            <Animated.Text entering={FadeInDown.delay(80).duration(400)} style={styles.title}>
+              Create Account
+            </Animated.Text>
+            <Animated.Text entering={FadeInDown.delay(140).duration(400)} style={styles.subtitle}>
               Register to start recording attendance
-            </Text>
+            </Animated.Text>
 
             {success ? (
-              <View style={styles.successContainer}>
+              <Animated.View
+                entering={FadeInDown.duration(400)}
+                style={styles.successContainer}
+              >
                 <Text style={styles.successTitle}>Check your email!</Text>
                 <Text style={styles.successText}>
                   We sent a confirmation link to {email}. Click the link to
@@ -104,9 +110,9 @@ export default function RegisterScreen() {
                 <Link href="/login" style={styles.link}>
                   Back to Sign In
                 </Link>
-              </View>
+              </Animated.View>
             ) : (
-              <View style={styles.form}>
+              <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.form}>
                 <Text style={styles.label}>Full Name</Text>
                 <TextInput
                   style={styles.input}
@@ -203,13 +209,15 @@ export default function RegisterScreen() {
                     onPress={handleRegister}
                   />
                 )}
-              </View>
+              </Animated.View>
             )}
 
             {!success && (
-              <Link href="/login" style={styles.link}>
-                Already have an account? Sign In
-              </Link>
+              <Animated.View entering={FadeInDown.delay(260).duration(400)}>
+                <Link href="/login" style={styles.link}>
+                  Already have an account? Sign In
+                </Link>
+              </Animated.View>
             )}
           </ScrollView>
         </TouchableWithoutFeedback>

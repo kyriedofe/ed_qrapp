@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import AppButton from '@/components/AppButton';
 import { COLORS } from '@/constants/colors';
@@ -68,23 +69,39 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>My Profile</Text>
+      <Animated.Text entering={FadeInDown.duration(400)} style={styles.title}>
+        My Profile
+      </Animated.Text>
 
       {profile?.role === 'admin' ? (
-        <View style={[styles.roleBadge, styles.roleBadgeAdmin]}>
-          <Text style={styles.roleBadgeText}>Administrator</Text>
-        </View>
+        <Animated.View
+          entering={FadeInDown.delay(80).duration(400)}
+          style={[styles.roleBadge, styles.roleBadgeAdmin]}
+        >
+          <Text style={[styles.roleBadgeText, styles.roleBadgeTextAdmin]}>
+            Administrator
+          </Text>
+        </Animated.View>
       ) : profile?.role === 'teacher' ? (
-        <View style={styles.roleBadge}>
+        <Animated.View
+          entering={FadeInDown.delay(80).duration(400)}
+          style={styles.roleBadge}
+        >
           <Text style={styles.roleBadgeText}>Teacher</Text>
-        </View>
+        </Animated.View>
       ) : (
-        <View style={[styles.roleBadge, styles.roleBadgeStudent]}>
+        <Animated.View
+          entering={FadeInDown.delay(80).duration(400)}
+          style={[styles.roleBadge, styles.roleBadgeStudent]}
+        >
           <Text style={styles.roleBadgeText}>Student</Text>
-        </View>
+        </Animated.View>
       )}
 
-      <View style={styles.infoCard}>
+      <Animated.View
+        entering={FadeInDown.delay(140).duration(400)}
+        style={styles.infoCard}
+      >
         <Text style={styles.label}>Name</Text>
         {editing ? (
           <View style={styles.nameEditRow}>
@@ -119,14 +136,16 @@ export default function ProfileScreen() {
 
         <Text style={styles.label}>User ID</Text>
         <Text style={styles.valueSmall}>{user?.id}</Text>
-      </View>
+      </Animated.View>
 
-      <AppButton
-        title="Sign Out"
-        icon="log-out-outline"
-        onPress={handleSignOut}
-        disabled={loading}
-      />
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <AppButton
+          title="Sign Out"
+          icon="log-out-outline"
+          onPress={handleSignOut}
+          disabled={loading}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -156,12 +175,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.warning,
   },
   roleBadgeAdmin: {
-    backgroundColor: COLORS.textPrimary,
+    backgroundColor: COLORS.textOnPrimary,
   },
   roleBadgeText: {
     color: COLORS.textOnPrimary,
     fontWeight: '700',
     fontSize: 12,
+  },
+  roleBadgeTextAdmin: {
+    color: COLORS.background,
   },
   infoCard: {
     backgroundColor: COLORS.card,

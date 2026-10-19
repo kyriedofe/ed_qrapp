@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -43,6 +45,7 @@ const SECTIONS: { key: Section; label: string; icon: keyof typeof Ionicons.glyph
 const ROLES: Role[] = ['student', 'teacher', 'admin'];
 
 export default function AdminScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [role, setRole] = useState<Role | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
@@ -183,16 +186,16 @@ export default function AdminScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
     >
-      <View style={styles.headerRow}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.headerRow}>
         <Text style={styles.title}>Admin Dashboard</Text>
         <Pressable style={styles.refreshBtn} onPress={loadAll} disabled={loading || busy}>
           <Ionicons name="refresh" size={16} color={COLORS.primary} />
           <Text style={styles.refreshText}>Refresh</Text>
         </Pressable>
-      </View>
+      </Animated.View>
 
       {/* Section tabs */}
-      <View style={styles.sectionRow}>
+      <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.sectionRow}>
         {SECTIONS.map((s) => (
           <Pressable
             key={s.key}
@@ -214,23 +217,23 @@ export default function AdminScreen() {
             </Text>
           </Pressable>
         ))}
-      </View>
+      </Animated.View>
 
       {loading ? (
-        <View style={styles.centered}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.muted}>Loading dashboard...</Text>
-        </View>
+        </Animated.View>
       ) : section === 'overview' ? (
-        <View style={styles.statsGrid}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.statsGrid}>
           <StatCard icon="people-outline" label="Users" value={stats?.users ?? 0} />
           <StatCard icon="calendar-outline" label="Events" value={stats?.events ?? 0} />
           <StatCard icon="checkbox-outline" label="Records" value={stats?.records ?? 0} />
           <StatCard icon="checkmark-circle-outline" label="Present" value={stats?.present ?? 0} />
           <StatCard icon="time-outline" label="Late" value={stats?.late ?? 0} />
-        </View>
+        </Animated.View>
       ) : section === 'users' ? (
-        <View style={styles.stack}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.stack}>
           <Text style={styles.sectionTitle}>Manage Users ({users.length})</Text>
           {users.length === 0 ? (
             <Text style={styles.muted}>No users found.</Text>
@@ -266,9 +269,9 @@ export default function AdminScreen() {
               </View>
             ))
           )}
-        </View>
+        </Animated.View>
       ) : section === 'events' ? (
-        <View style={styles.stack}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.stack}>
           <Text style={styles.sectionTitle}>Manage Events ({events.length})</Text>
           {events.length === 0 ? (
             <Text style={styles.muted}>No events found.</Text>
@@ -293,6 +296,18 @@ export default function AdminScreen() {
                   <Text style={styles.meta}>{e.event_code}</Text>
                   {e.venue ? <Text style={styles.meta}>📍 {e.venue}</Text> : null}
                   <Pressable
+                    style={[styles.wideBtn, styles.wideBtnManage]}
+                    disabled={busy}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/event/[id]',
+                        params: { id: e.id },
+                      })
+                    }
+                  >
+                    <Text style={styles.wideBtnManageText}>Manage Attendance</Text>
+                  </Pressable>
+                  <Pressable
                     style={[
                       styles.wideBtn,
                       closed ? styles.wideBtnOpen : styles.wideBtnClose,
@@ -313,9 +328,9 @@ export default function AdminScreen() {
               );
             })
           )}
-        </View>
+        </Animated.View>
       ) : (
-        <View style={styles.stack}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.stack}>
           <Text style={styles.sectionTitle}>
             Attendance Records ({attendance.length})
           </Text>
@@ -362,7 +377,7 @@ export default function AdminScreen() {
               </View>
             ))
           )}
-        </View>
+        </Animated.View>
       )}
     </ScrollView>
   );
@@ -378,11 +393,11 @@ function StatCard({
   value: number;
 }) {
   return (
-    <View style={styles.statCard}>
+    <Animated.View entering={FadeInDown.duration(400)} style={styles.statCard}>
       <Ionicons name={icon} size={22} color={COLORS.primary} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -572,6 +587,14 @@ const styles = StyleSheet.create({
   },
   wideBtnOpen: {
     borderColor: COLORS.success,
+  },
+  wideBtnManage: {
+    borderColor: COLORS.primary,
+  },
+  wideBtnManageText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   wideBtnText: {
     fontSize: 13,
